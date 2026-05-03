@@ -1,0 +1,8 @@
+# MCP SDK
+mcp>=1.0.0
+
+# HTTP tool (opcional — para a ferramenta http_get)
+httpx>=0.28.0
+
+# Variáveis de ambiente (opcional)
+python-dotenv>=1.1.0
