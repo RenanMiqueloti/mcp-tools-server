@@ -66,7 +66,7 @@ client = MultiServerMCPClient({
 })
 
 tools = await client.get_tools()
-agent = create_react_agent(ChatAnthropic(model="claude-opus-4-6"), tools)
+agent = create_react_agent(ChatAnthropic(model="claude-opus-4-7"), tools)
 result = await agent.ainvoke({"messages": [("human", "What day of the week is it?")]})
 ```
 
