@@ -1,5 +1,9 @@
 # mcp-tools-server
 
+![CI](https://github.com/RenanMiqueloti/mcp-tools-server/actions/workflows/ci.yml/badge.svg)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python](https://img.shields.io/badge/python-3.12-blue.svg)
+
 Servidor **MCP** (Model Context Protocol) de propósito geral com ferramentas utilitárias prontas para consumo por qualquer agente compatível.
 
 > Demonstra implementação *server-side* do MCP — a maioria dos projetos apenas consome servidores. Este projeto implementa um.

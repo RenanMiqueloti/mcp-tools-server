@@ -33,18 +33,20 @@ Configuração (LangGraph MCP adapter):
         "mcp-tools": {"command": "python", "args": ["server.py"], "transport": "stdio"}
     })
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import math
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 try:
     from mcp import types
     from mcp.server import Server
     from mcp.server.stdio import stdio_server
+
     _MCP_OK = True
 except ImportError:
     _MCP_OK = False
@@ -52,9 +54,7 @@ except ImportError:
 # ── Config ────────────────────────────────────────────────────────────────
 
 # Domínios permitidos para http_get (segurança — edite conforme necessário)
-HTTP_ALLOWLIST = re.compile(
-    r"^https?://(api\.github\.com|api\.openai\.com|httpbin\.org|wttr\.in)"
-)
+HTTP_ALLOWLIST = re.compile(r"^https?://(api\.github\.com|api\.openai\.com|httpbin\.org|wttr\.in)")
 
 # ── Server ────────────────────────────────────────────────────────────────
 
@@ -154,15 +154,19 @@ if _MCP_OK:
 
         # ── datetime_info ─────────────────────────────────────────────────
         if name == "datetime_info":
-            now = datetime.now(tz=timezone.utc)
-            return text(json.dumps({
-                "iso": now.isoformat(),
-                "unix": int(now.timestamp()),
-                "weekday": now.strftime("%A"),
-                "week_number": now.isocalendar()[1],
-                "date": now.strftime("%Y-%m-%d"),
-                "time": now.strftime("%H:%M:%S"),
-            }))
+            now = datetime.now(tz=UTC)
+            return text(
+                json.dumps(
+                    {
+                        "iso": now.isoformat(),
+                        "unix": int(now.timestamp()),
+                        "weekday": now.strftime("%A"),
+                        "week_number": now.isocalendar()[1],
+                        "date": now.strftime("%Y-%m-%d"),
+                        "time": now.strftime("%H:%M:%S"),
+                    }
+                )
+            )
 
         # ── calculate ─────────────────────────────────────────────────────
         if name == "calculate":
@@ -170,9 +174,9 @@ if _MCP_OK:
             ns = {k: v for k, v in math.__dict__.items() if not k.startswith("_")}
             ns.update({"abs": abs, "round": round, "min": min, "max": max, "sum": sum})
             try:
-                result = eval(expr, {"__builtins__": {}}, ns)  # noqa: S307
+                result = eval(expr, {"__builtins__": {}}, ns)
                 return text(str(result))
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 return text(f"Error: {exc}")
 
         # ── text_stats ────────────────────────────────────────────────────
@@ -182,12 +186,16 @@ if _MCP_OK:
             sentences = len(re.split(r"[.!?]+", t.strip()))
             chars = len(t)
             tokens_est = int(words / 0.75)
-            return text(json.dumps({
-                "words": words,
-                "sentences": sentences,
-                "characters": chars,
-                "tokens_estimated": tokens_est,
-            }))
+            return text(
+                json.dumps(
+                    {
+                        "words": words,
+                        "sentences": sentences,
+                        "characters": chars,
+                        "tokens_estimated": tokens_est,
+                    }
+                )
+            )
 
         # ── json_extract ──────────────────────────────────────────────────
         if name == "json_extract":
@@ -210,7 +218,11 @@ if _MCP_OK:
             # client = QdrantClient(url=os.getenv("QDRANT_URL"))
             # hits = client.search("knowledge", query_vector=embed(query), limit=top_k)
             stub = [
-                {"rank": i + 1, "text": f"Stub result {i+1} for '{query}'", "score": round(0.9 - i * 0.1, 2)}
+                {
+                    "rank": i + 1,
+                    "text": f"Stub result {i + 1} for '{query}'",
+                    "score": round(0.9 - i * 0.1, 2),
+                }
                 for i in range(top_k)
             ]
             return text(json.dumps(stub, indent=2))
@@ -223,21 +235,20 @@ if _MCP_OK:
             timeout = float(arguments.get("timeout", 10))
             try:
                 import httpx  # type: ignore[import]
+
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     resp = await client.get(url)
                     return text(resp.text[:4000])
             except ImportError:
                 return text("Error: httpx not installed. Run: pip install httpx")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 return text(f"Error: {exc}")
 
         raise ValueError(f"Unknown tool: {name!r}")
 
     async def _main() -> None:
         async with stdio_server() as (read_stream, write_stream):
-            await server.run(
-                read_stream, write_stream, server.create_initialization_options()
-            )
+            await server.run(read_stream, write_stream, server.create_initialization_options())
 
     if __name__ == "__main__":
         asyncio.run(_main())
