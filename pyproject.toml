@@ -1,0 +1,51 @@
+[project]
+name = "mcp-tools-server"
+version = "0.1.0"
+description = "Custom MCP server with utility tools — datetime, calculate, text_stats, json_extract, search_knowledge, http_get"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "Renan Miqueloti", email = "renanmiqueloti@gmail.com" }]
+keywords = ["mcp", "model-context-protocol", "claude", "anthropic", "tools", "ai-tools"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/RenanMiqueloti/mcp-tools-server"
+Issues = "https://github.com/RenanMiqueloti/mcp-tools-server/issues"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["server"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+# Same rationale as the other repos: pt-BR copy in docstrings uses en-dash.
+ignore = ["E501", "RUF002", "RUF003"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-ra --strict-markers"
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_configs = true
+ignore_missing_imports = true
