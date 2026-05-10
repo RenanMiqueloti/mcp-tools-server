@@ -6,7 +6,7 @@ readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 authors = [{ name = "Renan Miqueloti", email = "renanmiqueloti@gmail.com" }]
-keywords = ["mcp", "model-context-protocol", "tools", "agents", "claude", "langgraph"]
+keywords = ["mcp", "model-context-protocol", "tools", "agents", "claude", "anthropic", "langgraph", "ai-tools"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "License :: OSI Approved :: MIT License",

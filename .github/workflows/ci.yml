@@ -35,5 +35,5 @@ jobs:
           python-version: ${{ matrix.python }}
           cache: pip
       - run: pip install -r requirements.txt
-      - run: pip install pytest
-      - run: pytest -v tests/
+      - run: pip install pytest pytest-cov
+      - run: pytest -v --cov=. --cov-report=term-missing tests/
