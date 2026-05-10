@@ -6,13 +6,14 @@ readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 authors = [{ name = "Renan Miqueloti", email = "renanmiqueloti@gmail.com" }]
-keywords = ["mcp", "model-context-protocol", "claude", "anthropic", "tools", "ai-tools"]
+keywords = ["mcp", "model-context-protocol", "tools", "agents", "claude", "anthropic", "langgraph", "ai-tools"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
@@ -33,8 +34,8 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
-# Same rationale as the other repos: pt-BR copy in docstrings uses en-dash.
-ignore = ["E501", "RUF002", "RUF003"]
+# pt-BR copy uses en-dash and other unicode chars in docstrings/strings.
+ignore = ["E501", "RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -49,3 +50,8 @@ addopts = "-ra --strict-markers"
 python_version = "3.12"
 warn_unused_configs = true
 ignore_missing_imports = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
