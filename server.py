@@ -1,37 +1,22 @@
-"""mcp-tools-server — Servidor MCP de propósito geral para agentes de IA.
+"""mcp-tools-server — MCP server with general-purpose utility tools.
 
-Expõe ferramentas utilitárias prontas para consumo por qualquer cliente MCP:
-Claude Desktop, LangGraph MCP adapter, OpenAI Agents SDK, etc.
+Tools are exposed over the MCP stdio transport for Claude Desktop, the
+LangGraph MCP adapter, the OpenAI Agents SDK or any compatible client.
 
-Ferramentas:
-    datetime_info      — data, hora, timezone, dia da semana
-    calculate          — expressões matemáticas seguras (math completo)
-    text_stats         — contagem de palavras, sentenças, tokens estimados
-    json_extract       — extrai valores de JSON via dot-path
-    search_knowledge   — stub para busca vetorial (conecte ao seu Qdrant aqui)
-    http_get           — GET HTTP simples (URLs permitidas via allowlist)
+Tool list:
+    datetime_info      — current UTC date/time, weekday, ISO week number
+    calculate          — math expression evaluator (sandboxed to ``math``)
+    text_stats         — word, sentence, character and token estimate
+    json_extract       — value lookup via dot-path (``user.address.city``)
+    search_knowledge   — vector search stub — wire to your Qdrant/pgvector
+    http_get           — HTTP GET against an allowlisted set of domains
 
-Transporte: stdio (padrão MCP)
+Each handler is exported as a plain function so it can be unit-tested
+without an MCP runtime.
 
-Uso:
+Usage:
     pip install mcp httpx
     python server.py
-
-Configuração (Claude Desktop):
-    {
-      "mcpServers": {
-        "mcp-tools": {
-          "command": "python",
-          "args": ["/path/to/server.py"]
-        }
-      }
-    }
-
-Configuração (LangGraph MCP adapter):
-    from langchain_mcp_adapters.client import MultiServerMCPClient
-    client = MultiServerMCPClient({
-        "mcp-tools": {"command": "python", "args": ["server.py"], "transport": "stdio"}
-    })
 """
 
 from __future__ import annotations
@@ -41,6 +26,7 @@ import json
 import math
 import re
 from datetime import UTC, datetime
+from typing import Any
 
 try:
     from mcp import types
@@ -53,10 +39,93 @@ except ImportError:
 
 # ── Config ────────────────────────────────────────────────────────────────
 
-# Domínios permitidos para http_get (segurança — edite conforme necessário)
+# Allowlist for http_get. Edit to taste — anything outside this set is
+# rejected before the request leaves the process.
 HTTP_ALLOWLIST = re.compile(r"^https?://(api\.github\.com|api\.openai\.com|httpbin\.org|wttr\.in)")
 
-# ── Server ────────────────────────────────────────────────────────────────
+# ── Tool handlers (pure, directly testable) ──────────────────────────────
+
+
+def datetime_info() -> dict[str, Any]:
+    """Return the current UTC date/time in several useful formats."""
+    now = datetime.now(tz=UTC)
+    return {
+        "iso": now.isoformat(),
+        "unix": int(now.timestamp()),
+        "weekday": now.strftime("%A"),
+        "week_number": now.isocalendar()[1],
+        "date": now.strftime("%Y-%m-%d"),
+        "time": now.strftime("%H:%M:%S"),
+    }
+
+
+def calculate(expression: str) -> str:
+    """Evaluate a math expression in a namespace restricted to ``math``."""
+    expr = (expression or "").strip()
+    ns: dict[str, Any] = {k: v for k, v in math.__dict__.items() if not k.startswith("_")}
+    ns.update({"abs": abs, "round": round, "min": min, "max": max, "sum": sum})
+    try:
+        return str(eval(expr, {"__builtins__": {}}, ns))
+    except Exception as exc:
+        return f"Error: {exc}"
+
+
+def text_stats(text: str) -> dict[str, int]:
+    """Return word, sentence and character counts plus a token estimate."""
+    t = text or ""
+    words = len(t.split())
+    sentences = len([s for s in re.split(r"[.!?]+", t.strip()) if s])
+    return {
+        "words": words,
+        "sentences": sentences,
+        "characters": len(t),
+        "tokens_estimated": int(words / 0.75) if words else 0,
+    }
+
+
+def json_extract(json_string: str, path: str) -> str:
+    """Extract a JSON value via dot-path (``a.b.c``). Returns ``Error: ...`` on failure."""
+    try:
+        data = json.loads(json_string or "{}")
+        keys = (path or "").split(".") if path else []
+        val: Any = data
+        for k in keys:
+            val = val[k]
+        return str(val)
+    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        return f"Error: {exc}"
+
+
+def search_knowledge(query: str, top_k: int = 3) -> list[dict[str, Any]]:
+    """Stub for vector search — replace the body with your real Qdrant/pgvector query."""
+    n = max(0, int(top_k))
+    return [
+        {
+            "rank": i + 1,
+            "text": f"Stub result {i + 1} for {query!r}",
+            "score": round(0.9 - i * 0.1, 2),
+        }
+        for i in range(n)
+    ]
+
+
+async def http_get(url: str, timeout: float = 10.0) -> str:
+    """HTTP GET against an allowlisted domain. Body truncated at 4000 chars."""
+    if not HTTP_ALLOWLIST.match(url or ""):
+        return f"Error: URL not in allowlist — {url}"
+    try:
+        import httpx  # type: ignore[import]
+
+        async with httpx.AsyncClient(timeout=float(timeout)) as client:
+            resp = await client.get(url)
+            return resp.text[:4000]
+    except ImportError:
+        return "Error: httpx not installed. Run: pip install httpx"
+    except Exception as exc:
+        return f"Error: {exc}"
+
+
+# ── MCP Server (stdio transport) ─────────────────────────────────────────
 
 if _MCP_OK:
     server = Server("mcp-tools-server", version="1.0.0")
@@ -152,97 +221,37 @@ if _MCP_OK:
         def text(s: str) -> list[types.TextContent]:
             return [types.TextContent(type="text", text=s)]
 
-        # ── datetime_info ─────────────────────────────────────────────────
         if name == "datetime_info":
-            now = datetime.now(tz=UTC)
-            return text(
-                json.dumps(
-                    {
-                        "iso": now.isoformat(),
-                        "unix": int(now.timestamp()),
-                        "weekday": now.strftime("%A"),
-                        "week_number": now.isocalendar()[1],
-                        "date": now.strftime("%Y-%m-%d"),
-                        "time": now.strftime("%H:%M:%S"),
-                    }
-                )
-            )
+            return text(json.dumps(datetime_info()))
 
-        # ── calculate ─────────────────────────────────────────────────────
         if name == "calculate":
-            expr = arguments.get("expression", "").strip()
-            ns = {k: v for k, v in math.__dict__.items() if not k.startswith("_")}
-            ns.update({"abs": abs, "round": round, "min": min, "max": max, "sum": sum})
-            try:
-                result = eval(expr, {"__builtins__": {}}, ns)
-                return text(str(result))
-            except Exception as exc:
-                return text(f"Error: {exc}")
+            return text(calculate(arguments.get("expression", "")))
 
-        # ── text_stats ────────────────────────────────────────────────────
         if name == "text_stats":
-            t = arguments.get("text", "")
-            words = len(t.split())
-            sentences = len(re.split(r"[.!?]+", t.strip()))
-            chars = len(t)
-            tokens_est = int(words / 0.75)
+            return text(json.dumps(text_stats(arguments.get("text", ""))))
+
+        if name == "json_extract":
             return text(
-                json.dumps(
-                    {
-                        "words": words,
-                        "sentences": sentences,
-                        "characters": chars,
-                        "tokens_estimated": tokens_est,
-                    }
+                json_extract(
+                    arguments.get("json_string", "{}"),
+                    arguments.get("path", ""),
                 )
             )
 
-        # ── json_extract ──────────────────────────────────────────────────
-        if name == "json_extract":
-            try:
-                data = json.loads(arguments.get("json_string", "{}"))
-                keys = arguments.get("path", "").split(".")
-                val = data
-                for k in keys:
-                    val = val[k]
-                return text(str(val))
-            except (KeyError, TypeError, json.JSONDecodeError) as exc:
-                return text(f"Error: {exc}")
-
-        # ── search_knowledge ──────────────────────────────────────────────
         if name == "search_knowledge":
-            query = arguments.get("query", "")
-            top_k = int(arguments.get("top_k", 3))
-            # TODO: Replace with actual Qdrant integration:
-            # from qdrant_client import QdrantClient
-            # client = QdrantClient(url=os.getenv("QDRANT_URL"))
-            # hits = client.search("knowledge", query_vector=embed(query), limit=top_k)
-            stub = [
-                {
-                    "rank": i + 1,
-                    "text": f"Stub result {i + 1} for '{query}'",
-                    "score": round(0.9 - i * 0.1, 2),
-                }
-                for i in range(top_k)
-            ]
-            return text(json.dumps(stub, indent=2))
+            results = search_knowledge(
+                arguments.get("query", ""),
+                int(arguments.get("top_k", 3)),
+            )
+            return text(json.dumps(results, indent=2))
 
-        # ── http_get ──────────────────────────────────────────────────────
         if name == "http_get":
-            url = arguments.get("url", "")
-            if not HTTP_ALLOWLIST.match(url):
-                return text(f"Error: URL not in allowlist — {url}")
-            timeout = float(arguments.get("timeout", 10))
-            try:
-                import httpx  # type: ignore[import]
-
-                async with httpx.AsyncClient(timeout=timeout) as client:
-                    resp = await client.get(url)
-                    return text(resp.text[:4000])
-            except ImportError:
-                return text("Error: httpx not installed. Run: pip install httpx")
-            except Exception as exc:
-                return text(f"Error: {exc}")
+            return text(
+                await http_get(
+                    arguments.get("url", ""),
+                    float(arguments.get("timeout", 10)),
+                )
+            )
 
         raise ValueError(f"Unknown tool: {name!r}")
 
@@ -255,4 +264,4 @@ if _MCP_OK:
 
 else:
     if __name__ == "__main__":
-        print("⚠️  MCP SDK não encontrado. Instale com: pip install mcp")
+        print("MCP SDK not installed. Run: pip install mcp")

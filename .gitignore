@@ -1,16 +1,33 @@
-
-# Python cache
+# Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Tooling caches
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 
-# venv
-.venv/
-venv/
-
-# coverage
+# Coverage
 .coverage
 htmlcov/
+
+# IDE
+.vscode/
+.idea/
+
+# Env files (keep .env.example)
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db

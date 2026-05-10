@@ -2,11 +2,11 @@
 
 ![CI](https://github.com/RenanMiqueloti/mcp-tools-server/actions/workflows/ci.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/python-3.12-blue.svg)
+![Python](https://img.shields.io/badge/python-3.11%E2%80%933.13-blue.svg)
 
-Servidor **MCP** (Model Context Protocol) de propósito geral com ferramentas utilitárias prontas para consumo por qualquer agente compatível.
+Servidor **MCP** (Model Context Protocol) com seis ferramentas utilitárias para qualquer cliente compatível — Claude Desktop, LangGraph MCP adapter, OpenAI Agents SDK.
 
-> Demonstra implementação *server-side* do MCP — a maioria dos projetos apenas consome servidores. Este projeto implementa um.
+Implementação *server-side* do MCP (em vez de consumir um servidor existente), com handlers extraídos como funções puras pra serem testáveis sem o runtime MCP.
 
 ---
 
@@ -98,8 +98,27 @@ results = [{"rank": i+1, "text": h.payload["text"], "score": h.score} for i, h i
 
 ```
 mcp-tools-server/
-├── server.py         # Servidor MCP completo (stdio transport)
+├── server.py                   # Servidor MCP (stdio transport) + handlers
+├── tests/                      # pytest — handlers + allowlist
+├── pyproject.toml              # ruff, pytest, mypy config
+├── Dockerfile, .dockerignore   # imagem 3.12-slim, USER non-root
+├── .pre-commit-config.yaml     # ruff + ruff-format + checks gerais
+├── .github/
+│   ├── workflows/ci.yml        # lint (ruff) + tests (py3.11/3.12/3.13)
+│   └── dependabot.yml          # pip + github-actions + docker
 ├── requirements.txt
 ├── .env.example
 └── LICENSE
+```
+
+---
+
+## Desenvolvimento
+
+```bash
+pip install -r requirements.txt
+pip install pytest ruff pre-commit
+pre-commit install               # ativa o hook git pre-commit
+pytest -v tests/                 # roda os testes dos handlers
+ruff check . && ruff format --check .
 ```

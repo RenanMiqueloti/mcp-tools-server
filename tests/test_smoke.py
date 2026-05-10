@@ -1,10 +1,9 @@
 """Smoke tests for mcp-tools-server.
 
-Exercises the server's tool list and the handlers that are deterministic
-and do not perform I/O (calculate, text_stats, json_extract, http_get
-allowlist rejection). The mcp SDK import is guarded with importorskip so
-the structural assertions still run when only a partial install is
-available.
+Validates repo layout, README branding and that the module imports without
+the MCP SDK installed (the server gracefully degrades to a no-op when
+``mcp`` is missing). Dispatcher tests using ``call_tool`` are guarded with
+``importorskip`` so they only run when the MCP SDK is available.
 """
 
 from __future__ import annotations
@@ -21,8 +20,10 @@ ROOT = Path(__file__).resolve().parent.parent
 def test_repo_layout() -> None:
     assert (ROOT / "server.py").is_file()
     assert (ROOT / "requirements.txt").is_file()
-    assert (ROOT / "README.md").is_file()
+    assert (ROOT / ".env.example").is_file()
     assert (ROOT / "LICENSE").is_file()
+    assert (ROOT / "pyproject.toml").is_file()
+    assert (ROOT / "README.md").is_file()
 
 
 def test_readme_present_and_branded() -> None:
@@ -31,7 +32,19 @@ def test_readme_present_and_branded() -> None:
     assert "MCP" in readme
 
 
-def test_server_module_imports() -> None:
+def test_module_imports_without_mcp() -> None:
+    """The module must import even when mcp is absent — handlers stay usable."""
+    import server
+
+    assert hasattr(server, "datetime_info")
+    assert hasattr(server, "calculate")
+    assert hasattr(server, "text_stats")
+    assert hasattr(server, "json_extract")
+    assert hasattr(server, "search_knowledge")
+    assert hasattr(server, "http_get")
+
+
+def test_server_module_with_mcp() -> None:
     pytest.importorskip("mcp")
     import server
 
@@ -56,7 +69,7 @@ def test_list_tools_exposes_six_tools() -> None:
     }
 
 
-def test_calculate_tool_evaluates_expression() -> None:
+def test_call_tool_calculate() -> None:
     pytest.importorskip("mcp")
     import server
 
@@ -65,7 +78,7 @@ def test_calculate_tool_evaluates_expression() -> None:
     assert result[0].text == "3.0"
 
 
-def test_calculate_tool_rejects_builtins() -> None:
+def test_call_tool_calculate_rejects_builtins() -> None:
     pytest.importorskip("mcp")
     import server
 
@@ -73,7 +86,7 @@ def test_calculate_tool_rejects_builtins() -> None:
     assert result[0].text.startswith("Error:")
 
 
-def test_text_stats_tool_counts_correctly() -> None:
+def test_call_tool_text_stats() -> None:
     pytest.importorskip("mcp")
     import server
 
@@ -84,7 +97,7 @@ def test_text_stats_tool_counts_correctly() -> None:
     assert payload["characters"] == len("Hello world. This is a test.")
 
 
-def test_json_extract_dot_path() -> None:
+def test_call_tool_json_extract() -> None:
     pytest.importorskip("mcp")
     import server
 
@@ -97,7 +110,7 @@ def test_json_extract_dot_path() -> None:
     assert result[0].text == "Renan"
 
 
-def test_http_get_blocks_unlisted_domain() -> None:
+def test_call_tool_http_get_blocks_unlisted_domain() -> None:
     pytest.importorskip("mcp")
     import server
 
@@ -107,7 +120,7 @@ def test_http_get_blocks_unlisted_domain() -> None:
     assert "not in allowlist" in result[0].text.lower()
 
 
-def test_unknown_tool_raises() -> None:
+def test_call_tool_unknown_raises() -> None:
     pytest.importorskip("mcp")
     import server
 
