@@ -47,14 +47,34 @@ def test_calculate_uses_math_constants() -> None:
 
 
 def test_calculate_blocks_builtins() -> None:
-    # __import__, open, etc. must not be reachable through eval's builtins.
+    # __import__, open, etc. must not be reachable.
     out = server.calculate("__import__('os')")
+    assert out.startswith("Error:")
+
+
+def test_calculate_blocks_attribute_traversal() -> None:
+    # The classic eval-sandbox escape: reaching object internals via
+    # attribute access on a literal. The AST whitelist must reject it.
+    for payload in (
+        "().__class__",
+        "().__class__.__base__.__subclasses__()",
+        "(1).__class__.__bases__",
+    ):
+        assert server.calculate(payload).startswith("Error:")
+
+
+def test_calculate_caps_exponent() -> None:
+    out = server.calculate("9**9**9")
     assert out.startswith("Error:")
 
 
 def test_calculate_handles_syntax_error() -> None:
     out = server.calculate("2 +")
     assert out.startswith("Error:")
+
+
+def test_calculate_empty_expression() -> None:
+    assert server.calculate("").startswith("Error:")
 
 
 # ── text_stats ────────────────────────────────────────────────────────────
@@ -96,6 +116,21 @@ def test_json_extract_invalid_json() -> None:
     assert out.startswith("Error:")
 
 
+def test_json_extract_list_index() -> None:
+    out = server.json_extract('{"items": [10, 20, 30]}', "items.1")
+    assert out == "20"
+
+
+def test_json_extract_non_scalar_is_json() -> None:
+    out = server.json_extract('{"user": {"name": "Renan"}}', "user")
+    assert out == '{"name": "Renan"}'
+
+
+def test_json_extract_bad_list_index() -> None:
+    out = server.json_extract('{"items": [1, 2]}', "items.x")
+    assert out.startswith("Error:")
+
+
 # ── search_knowledge (stub) ───────────────────────────────────────────────
 
 
@@ -127,7 +162,7 @@ def test_http_get_blocks_empty_url() -> None:
     assert "not in allowlist" in out
 
 
-# ── allowlist regex ───────────────────────────────────────────────────────
+# ── host allowlist ────────────────────────────────────────────────────────
 
 
 @pytest.mark.parametrize(
@@ -140,10 +175,14 @@ def test_http_get_blocks_empty_url() -> None:
         ("https://example.com", False),
         ("ftp://api.github.com", False),
         ("", False),
+        # bypasses a prefix-regex would let through:
+        ("https://api.github.com.evil.com/x", False),  # suffix look-alike
+        ("https://api.github.com@evil.com/x", False),  # userinfo trick
+        ("https://evil.com/api.github.com", False),  # host in path
     ],
 )
-def test_allowlist_pattern(url: str, allowed: bool) -> None:
-    assert bool(server.HTTP_ALLOWLIST.match(url)) is allowed
+def test_host_allowlist(url: str, allowed: bool) -> None:
+    assert server._host_allowed(url) is allowed
 
 
 # ── JSON serialisation roundtrip on the dispatcher payloads ──────────────

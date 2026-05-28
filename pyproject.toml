@@ -1,6 +1,6 @@
 [project]
 name = "mcp-tools-server"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Custom MCP server with utility tools — datetime, calculate, text_stats, json_extract, search_knowledge, http_get"
 readme = "README.md"
 license = { text = "MIT" }
@@ -14,6 +14,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
@@ -28,9 +29,12 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 py-modules = ["server"]
 
+[tool.setuptools.dynamic]
+version = { attr = "server.__version__" }
+
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
@@ -47,7 +51,7 @@ python_files = "test_*.py"
 addopts = "-ra --strict-markers"
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.11"
 warn_unused_configs = true
 ignore_missing_imports = true
 check_untyped_defs = true
