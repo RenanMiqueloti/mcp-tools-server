@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/RenanMiqueloti/mcp-tools-server/actions/workflows/ci.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/python-3.11%E2%80%933.13-blue.svg)
+![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue.svg)
 
 Servidor **MCP** (Model Context Protocol) com seis ferramentas utilitárias para qualquer cliente compatível — Claude Desktop, LangGraph MCP adapter, OpenAI Agents SDK.
 
@@ -104,7 +104,7 @@ mcp-tools-server/
 ├── Dockerfile, .dockerignore   # imagem 3.12-slim, USER non-root
 ├── .pre-commit-config.yaml     # ruff + ruff-format + checks gerais
 ├── .github/
-│   ├── workflows/ci.yml        # lint (ruff) + tests (py3.11/3.12/3.13)
+│   ├── workflows/ci.yml        # lint (ruff) + mypy + tests (py3.11–3.14)
 │   └── dependabot.yml          # pip + github-actions + docker
 ├── requirements.txt
 ├── .env.example
@@ -117,8 +117,9 @@ mcp-tools-server/
 
 ```bash
 pip install -r requirements.txt
-pip install pytest ruff pre-commit
+pip install pytest ruff mypy pre-commit
 pre-commit install               # ativa o hook git pre-commit
 pytest -v tests/                 # roda os testes dos handlers
 ruff check . && ruff format --check .
+mypy .                           # type-check
 ```
