@@ -92,6 +92,12 @@ _CALC_CONSTS = {k: v for k, v in _MATH_NS.items() if not callable(v)}
 # Cap exponents so ``9**9**9`` can't lock the process on a giant int.
 _MAX_EXPONENT = 1000
 
+# Same guard for the factorial family: ``factorial``/``comb``/``perm`` build a
+# huge integer from a small-looking argument (``factorial(10**8)``), so reject a
+# large argument up front instead of computing it and only failing on str().
+_FACTORIAL_FUNCS = frozenset({"factorial", "comb", "perm"})
+_MAX_FACTORIAL_ARG = 10_000
+
 
 def _eval_node(node: ast.AST) -> Any:
     if isinstance(node, ast.Expression):
@@ -119,7 +125,12 @@ def _eval_node(node: ast.AST) -> Any:
     if isinstance(node, ast.Call):
         if node.keywords or not isinstance(node.func, ast.Name) or node.func.id not in _CALC_FUNCS:
             raise ValueError("disallowed call")
-        return _CALC_FUNCS[node.func.id](*[_eval_node(a) for a in node.args])
+        args = [_eval_node(a) for a in node.args]
+        if node.func.id in _FACTORIAL_FUNCS and any(
+            isinstance(a, (int, float)) and a > _MAX_FACTORIAL_ARG for a in args
+        ):
+            raise ValueError("argument too large")
+        return _CALC_FUNCS[node.func.id](*args)
     raise ValueError(f"disallowed expression: {type(node).__name__}")
 
 

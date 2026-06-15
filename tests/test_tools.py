@@ -68,6 +68,22 @@ def test_calculate_caps_exponent() -> None:
     assert out.startswith("Error:")
 
 
+def test_calculate_caps_factorial_argument() -> None:
+    # A small-looking argument expands to a giant integer — the same DoS the
+    # exponent cap guards against. It must be refused, not computed.
+    assert server.calculate("factorial(10**8)").startswith("Error:")
+    assert server.calculate("factorial(60000)").startswith("Error:")
+
+
+def test_calculate_caps_comb_and_perm() -> None:
+    assert server.calculate("comb(100000, 50000)").startswith("Error:")
+    assert server.calculate("perm(50000, 40000)").startswith("Error:")
+
+
+def test_calculate_allows_small_factorial() -> None:
+    assert server.calculate("factorial(20)") == "2432902008176640000"
+
+
 def test_calculate_handles_syntax_error() -> None:
     out = server.calculate("2 +")
     assert out.startswith("Error:")
