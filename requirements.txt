@@ -1,5 +1,5 @@
 # MCP SDK
-mcp>=1.27.2
+mcp>=1.28.0
 
 # HTTP tool (opcional — para a ferramenta http_get)
 httpx>=0.28.1
