@@ -18,10 +18,33 @@ import server
 
 def test_datetime_info_shape() -> None:
     out = server.datetime_info()
-    for key in ("iso", "unix", "weekday", "week_number", "date", "time"):
+    for key in ("iso", "unix", "weekday", "week_number", "date", "time", "timezone", "utc_offset"):
         assert key in out
     assert isinstance(out["unix"], int)
     assert 1 <= out["week_number"] <= 53
+
+
+def test_datetime_info_defaults_to_utc() -> None:
+    out = server.datetime_info()
+    assert out["timezone"] == "UTC"
+    assert out["utc_offset"] == "+0000"
+
+
+def test_datetime_info_accepts_iana_timezone() -> None:
+    out = server.datetime_info("America/Sao_Paulo")
+    assert out["timezone"] == "America/Sao_Paulo"
+    # BRT o ano todo desde o fim do horário de verão; -0200 cobre dados antigos
+    assert out["utc_offset"] in ("-0300", "-0200")
+
+
+def test_datetime_info_rejects_unknown_timezone() -> None:
+    with pytest.raises(ValueError, match="unknown timezone"):
+        server.datetime_info("Not/AZone")
+
+
+def test_run_datetime_unknown_timezone_returns_error_string() -> None:
+    out = asyncio.run(server._run_datetime({"timezone": "Not/AZone"}))
+    assert out.startswith("Error:")
 
 
 # ── calculate ─────────────────────────────────────────────────────────────
