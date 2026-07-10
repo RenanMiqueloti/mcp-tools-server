@@ -1,10 +1,10 @@
 """mcp-tools-server — MCP server with general-purpose utility tools.
 
-Tools are exposed over the MCP stdio transport for Claude Desktop, the
-LangGraph MCP adapter, the OpenAI Agents SDK or any compatible client.
+Tools are exposed over the MCP stdio transport (Claude Desktop, LangGraph
+MCP adapter, OpenAI Agents SDK) or over Streamable HTTP for remote clients.
 
 Tool list:
-    datetime_info      — current UTC date/time, weekday, ISO week number
+    datetime_info      — current date/time (UTC or IANA timezone), weekday, ISO week
     calculate          — math expression evaluator (AST whitelist, no eval)
     text_stats         — word, sentence, character and token estimate
     json_extract       — value lookup via dot-path (``user.address.city``)
@@ -17,11 +17,13 @@ registry, so ``list_tools`` and ``call_tool`` can never drift apart.
 
 Usage:
     pip install mcp httpx
-    python server.py
+    python server.py                                      # stdio (default)
+    python server.py --transport streamable-http          # HTTP em /mcp (porta 8000)
 """
 
 from __future__ import annotations
 
+import argparse
 import ast
 import asyncio
 import json
@@ -32,6 +34,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any, NamedTuple
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 try:
     from mcp import types
@@ -137,9 +140,24 @@ def _eval_node(node: ast.AST) -> Any:
 # ── Tool handlers (pure, directly testable) ──────────────────────────────
 
 
-def datetime_info() -> dict[str, Any]:
-    """Return the current UTC date/time in several useful formats."""
-    now = datetime.now(tz=UTC)
+def datetime_info(timezone: str | None = None) -> dict[str, Any]:
+    """Return the current date/time in several useful formats.
+
+    ``timezone`` is an IANA name (``America/Sao_Paulo``); default is UTC.
+
+    Raises:
+        ValueError: if ``timezone`` is not a known IANA name.
+    """
+    if timezone:
+        try:
+            tz: Any = ZoneInfo(timezone)
+        except (ZoneInfoNotFoundError, ValueError, KeyError) as exc:
+            raise ValueError(
+                f"unknown timezone: {timezone!r} (use an IANA name like 'America/Sao_Paulo')"
+            ) from exc
+    else:
+        tz = UTC
+    now = datetime.now(tz=tz)
     return {
         "iso": now.isoformat(),
         "unix": int(now.timestamp()),
@@ -147,6 +165,8 @@ def datetime_info() -> dict[str, Any]:
         "week_number": now.isocalendar()[1],
         "date": now.strftime("%Y-%m-%d"),
         "time": now.strftime("%H:%M:%S"),
+        "timezone": str(tz),
+        "utc_offset": now.strftime("%z"),
     }
 
 
@@ -239,8 +259,11 @@ class ToolSpec(NamedTuple):
     handler: Callable[[dict[str, Any]], Awaitable[str]]
 
 
-async def _run_datetime(_: dict[str, Any]) -> str:
-    return json.dumps(datetime_info())
+async def _run_datetime(args: dict[str, Any]) -> str:
+    try:
+        return json.dumps(datetime_info(args.get("timezone")))
+    except ValueError as exc:
+        return f"Error: {exc}"
 
 
 async def _run_calculate(args: dict[str, Any]) -> str:
@@ -269,8 +292,20 @@ async def _run_http_get(args: dict[str, Any]) -> str:
 TOOLS: list[ToolSpec] = [
     ToolSpec(
         name="datetime_info",
-        description="Returns current UTC datetime, Unix timestamp, weekday name, and ISO week number.",
-        input_schema={"type": "object", "properties": {}, "required": []},
+        description=(
+            "Returns current datetime, Unix timestamp, weekday name, ISO week number "
+            "and UTC offset. Defaults to UTC; accepts an IANA timezone name."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "timezone": {
+                    "type": "string",
+                    "description": "IANA timezone name, e.g. 'America/Sao_Paulo'. Default: UTC.",
+                },
+            },
+            "required": [],
+        },
         handler=_run_datetime,
     ),
     ToolSpec(
@@ -354,7 +389,7 @@ TOOLS: list[ToolSpec] = [
 _TOOLS_BY_NAME: dict[str, ToolSpec] = {t.name: t for t in TOOLS}
 
 
-# ── MCP Server (stdio transport) ─────────────────────────────────────────
+# ── MCP Server (stdio + Streamable HTTP transports) ───────────────────────
 
 if _MCP_OK:
     server = Server("mcp-tools-server", version=__version__)
@@ -373,18 +408,60 @@ if _MCP_OK:
             raise ValueError(f"Unknown tool: {name!r}")
         return [types.TextContent(type="text", text=await spec.handler(arguments or {}))]
 
-    async def _main() -> None:
+    async def _run_stdio() -> None:
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(read_stream, write_stream, server.create_initialization_options())
+
+    def _build_http_app():
+        """Monta a app ASGI com o endpoint MCP Streamable HTTP em ``/mcp``.
+
+        ``stateless=True``: cada request é independente — não há sessão a
+        preservar entre calls, então o server escala horizontal sem event store.
+        """
+        import contextlib
+
+        from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+        from starlette.applications import Starlette
+        from starlette.routing import Mount
+
+        manager = StreamableHTTPSessionManager(app=server, stateless=True)
+
+        @contextlib.asynccontextmanager
+        async def lifespan(_app: Starlette):
+            async with manager.run():
+                yield
+
+        return Starlette(routes=[Mount("/mcp", app=manager.handle_request)], lifespan=lifespan)
+
+    def _parse_args() -> argparse.Namespace:
+        parser = argparse.ArgumentParser(description="mcp-tools-server")
+        parser.add_argument(
+            "--transport",
+            choices=("stdio", "streamable-http"),
+            default="stdio",
+            help="stdio para clients locais (Claude Desktop); streamable-http para remotos.",
+        )
+        parser.add_argument("--host", default="127.0.0.1")
+        parser.add_argument("--port", type=int, default=8000)
+        return parser.parse_args()
+
+    def _main() -> None:
         try:
             from dotenv import load_dotenv
 
             load_dotenv()
         except ImportError:
             pass
-        async with stdio_server() as (read_stream, write_stream):
-            await server.run(read_stream, write_stream, server.create_initialization_options())
+        args = _parse_args()
+        if args.transport == "streamable-http":
+            import uvicorn
+
+            uvicorn.run(_build_http_app(), host=args.host, port=args.port)
+        else:
+            asyncio.run(_run_stdio())
 
     if __name__ == "__main__":
-        asyncio.run(_main())
+        _main()
 
 else:
     if __name__ == "__main__":

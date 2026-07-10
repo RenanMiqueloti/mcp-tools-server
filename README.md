@@ -14,7 +14,7 @@ Implementação *server-side* do MCP (em vez de consumir um servidor existente),
 
 | Ferramenta | O que faz |
 |---|---|
-| `datetime_info` | Data, hora UTC, timestamp Unix, dia da semana, semana ISO |
+| `datetime_info` | Data, hora (UTC ou timezone IANA), timestamp Unix, dia da semana, semana ISO |
 | `calculate` | Avalia expressões matemáticas com segurança (math completo) |
 | `text_stats` | Palavras, sentenças, caracteres e tokens estimados de um texto |
 | `json_extract` | Extrai valores de JSON via dot-path (`user.address.city`) |
@@ -30,8 +30,13 @@ git clone https://github.com/RenanMiqueloti/mcp-tools-server.git
 cd mcp-tools-server
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python server.py
+python server.py                                # stdio (Claude Desktop etc.)
+python server.py --transport streamable-http    # HTTP em http://127.0.0.1:8000/mcp
 ```
+
+O transporte **Streamable HTTP** expõe o servidor para clients remotos (o stdio
+só funciona com processos locais). `--host` e `--port` ajustam o bind; o modo é
+stateless, então dá pra escalar horizontal sem event store.
 
 ---
 
