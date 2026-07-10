@@ -153,23 +153,25 @@ def test_streamable_http_end_to_end() -> None:
     port = us.servers[0].sockets[0].getsockname()[1]
 
     async def roundtrip() -> tuple[set[str], str]:
-        from mcp import ClientSession
+        from mcp import ClientSession, types
 
         try:  # mcp >= 1.28 renomeou o client; o alias antigo emite DeprecationWarning
-            from mcp.client.streamable_http import streamable_http_client
+            from mcp.client.streamable_http import streamable_http_client as http_client
         except ImportError:
-            from mcp.client.streamable_http import (
-                streamablehttp_client as streamable_http_client,
+            from mcp.client.streamable_http import (  # type: ignore[assignment]
+                streamablehttp_client as http_client,
             )
 
         async with (
-            streamable_http_client(f"http://127.0.0.1:{port}/mcp") as (read, write, _),
+            http_client(f"http://127.0.0.1:{port}/mcp") as (read, write, _),
             ClientSession(read, write) as session,
         ):
             await session.initialize()
             tools = await session.list_tools()
             result = await session.call_tool("calculate", {"expression": "2 + 2"})
-            return {t.name for t in tools.tools}, result.content[0].text
+            block = result.content[0]
+            assert isinstance(block, types.TextContent)
+            return {t.name for t in tools.tools}, block.text
 
     try:
         names, answer = asyncio.run(roundtrip())
