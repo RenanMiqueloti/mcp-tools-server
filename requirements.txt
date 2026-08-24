@@ -5,4 +5,4 @@ mcp>=1.28.1
 httpx>=0.28.1
 
 # Variáveis de ambiente (opcional)
-python-dotenv>=1.2.2
+python-dotenv>=1.2.3
